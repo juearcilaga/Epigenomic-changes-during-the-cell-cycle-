@@ -1,0 +1,118 @@
+---
+title: "Cellcycle"
+output:
+  html_document:
+    df_print: paged
+---
+```{r message=FALSE, warning=FALSE}
+library(GenomicRanges);library(ggplot2);library(dplyr);library(plyranges);library('Repitools');library(tidyr);library(readr)
+
+```
+
+```{r}
+EmsC_DNAsa_net_12 <- read.delim("~/Documents/cellcycle/041220_TSS_WG_mESC_DNase_Network_Annotated")
+#colnames(EmsC_DNAsa_net_12)
+head(EmsC_DNAsa_net_12)
+```
+
+```{r}
+EmsC_DNAsa_net<-data.frame(EmsC_DNAsa_net_12[,1],EmsC_DNAsa_net_12[,3:5],EmsC_DNAsa_net_12[,2],EmsC_DNAsa_net_12[,6:9]) 
+
+colnames(EmsC_DNAsa_net)<-c("Bait_ID","Bait_seqnames","Bait_start", "Bait_end", "oe_ID", "oe_seqnames","oe_start","oe_end","Bait_Interaction_Confidence")
+
+head(EmsC_DNAsa_net)
+```
+
+```{r}
+#write de code to do the same with the whole network and export the file with the reduced net
+write_tsv(EmsC_DNAsa_net, "EmsC_DNAsa_net.txt")
+```
+
+```{r}
+Annotated_props<- read.delim("~/Documents/cellcycle/041220_TSS_WG_mESC_DNase_Frags_Annotated")
+Annotated_props<-data.frame(Annotated_props[,1:4])
+```
+
+```{r}
+#Histogram
+Annotated_props$size<-Annotated_props$End-Annotated_props$Start
+head(Annotated_props$size)
+head(Annotated_props)
+```
+```{r}
+ggplot(Annotated_props, aes(x =size)) + theme_classic() + geom_histogram(color = "black",binwidth = 500) + ggtitle("Distribution of fragment sizes") +xlab("Fragment size")+ ylab("Frequency")+ theme(plot.title = element_text(hjust = 0.5))+xlim(0,20000)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+png("histosize.jpg", width = 12, height = 12, units = "cm", res = 600, pointsize = 10)
+ggplot(Annotated_props, aes(x =size)) + theme_classic() + geom_histogram(color = "black",binwidth = 500) + ggtitle("Distribution of fragment sizes") +xlab("Fragment size")+ ylab("Frequency")+ theme(plot.title = element_text(hjust = 0.5))+xlim(0,20000)
+dev.off()
+```
+
+```{r}
+gr_EmsC <- GRanges(
+    seqnames = Annotated_props$Chr,
+    ranges = IRanges(Annotated_props$Start, end = Annotated_props$End, names = Annotated_props$ID),
+    fragment_ID=Annotated_props$ID,
+	  fragment_start=Annotated_props$Start,
+	  fragment_end=Annotated_props$End,
+    fragment_size=Annotated_props$size)
+```
+
+```{r}
+rtracklayer::export.bed(gr_EmsC , "mEsC.bed")
+```
+
+```{r}
+Biomart_mm9<- read.delim("~/Documents/cellcycle/biomart_mm9.txt")
+colnames(Biomart_mm9)<-c("EnsemblGeneID", "EnsemblTranscriptID", "ExonChrStartbp", "ExonChrEndbp", "ExonRankinTranscript", "TranscriptStartbp", "TranscriptEndbp", "GeneStartbp", "GeneEndbp","AssociatedGeneName", "Transcriptcount", "EnsemblExonID","GeneBiotype","ChromosomeName")
+```
+
+```{r}
+Biomart_mm9$Chr <- paste0("chr", Biomart_mm9$ChromosomeName)
+```
+
+```{r}
+gr_annot<- GRanges(
+    seqnames = Biomart_mm9$Chr,
+    ranges = IRanges(
+    Biomart_mm9$GeneStartbp, 
+    end = Biomart_mm9$GeneEndbp, 
+    names = Biomart_mm9$EnsemblGeneID,
+	EnsembleGeneID=Biomart_mm9$EnsemblGeneID,
+    EnsembleTranscriptID=Biomart_mm9$EnsemblTranscriptID,
+    EnsemblExonID=Biomart_mm9$EnsemblExonID,
+    ExonChrStart=Biomart_mm9$ExonChrStartbp,
+    ExonChrEnd=Biomart_mm9$ExonChrEndbp,
+    ExonRankinTranscript=Biomart_mm9$ExonRankinTranscript,
+    TranscriptStart=Biomart_mm9$TranscriptStartbp,
+    TrnascriptEnd=Biomart_mm9$TranscriptEndbp,
+    GeneName=Biomart_mm9$AssociatedGeneName,
+    ChromosomeName=Biomart_mm9$Chr,
+    GeneBiotype=Biomart_mm9$GeneBiotype
+    ))
+
+```
+
+```{r}
+annotated_frags<-join_overlap_inner(gr_EmsC,gr_annot)
+annotated<- data.frame(seqnames(annotated_frags),ranges(annotated_frags),values(annotated_frags))
+head(annotated)
+write_tsv(annotated, "EmsC_net_geneanot.txt")
+
+```
+
+```{r}
+EmsC_net_raw <-cbind(EmsC_DNAsa_net[["Bait_ID"]],EmsC_DNAsa_net[["oe_ID"]],EmsC_DNAsa_net[["Bait_Interaction_Confidence"]])
+
+colnames(EmsC_net_raw)<-c("baitID","oeID", "score")
+
+head(EmsC_net_raw)
+
+EmsC_net_raw<-data.frame(EmsC_net_raw)
+
+write_tsv(EmsC_net_raw, "EmsC_net.txt")
+```
+
+
